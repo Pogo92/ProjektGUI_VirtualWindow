@@ -1,11 +1,10 @@
 import cv2
 import time
+from src.tracker import HeadTracker
+
 
 def main():
-    # 0 to domyślna wbudowana/pierwsza kamera; zmień na 1 lub 2, jeśli używasz zewnętrznej
     cap = cv2.VideoCapture(0)
-
-    # Opcjonalnie wymuszenie rozdzielczości i klatkażu kamery
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
@@ -13,44 +12,49 @@ def main():
         print("Błąd: Nie można otworzyć kamery.")
         return
 
+    tracker = HeadTracker()
     prev_time = 0
 
-    print("Kamera uruchomiona pomyślnie. Wciśnij 'q', aby zakończyć.")
+    print("System śledzenia uruchomiony. Wciśnij 'q', aby wyjść.")
 
     while True:
         ret, frame = cap.read()
         if not ret:
-            print("Błąd: Nie udało się pobrać klatki.")
             break
 
-        # Odbicie lustrzane obrazu (niezbędne, by ruch głowy w prawo był ruchem w prawo na ekranie)
+        # Odbicie lustrzane
         frame = cv2.flip(frame, 1)
 
-        # Wyliczenie aktualnego FPS
+        # Przetwarzanie klatki przez MediaPipe
+        coords, frame = tracker.process_frame(frame)
+
+        # Obliczanie FPS
         curr_time = time.time()
         fps = 1.0 / (curr_time - prev_time) if prev_time != 0 else 0
         prev_time = curr_time
 
-        # Wyświetlenie FPS na obrazie
-        cv2.putText(
-            frame,
-            f"FPS: {int(fps)}",
-            (20, 50),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            1,
-            (0, 255, 0),
-            2,
-            cv2.LINE_AA
-        )
+        # Nakładanie informacji tekstowych
+        cv2.putText(frame, f"FPS: {int(fps)}", (20, 40),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
-        cv2.imshow("Wirtualne Okno - Test Kamery", frame)
+        if coords:
+            x, y, z = coords
+            coord_text = f"X: {x:+.2f} | Y: {y:+.2f} | Z: {z:.2f} m"
+            cv2.putText(frame, coord_text, (20, 80),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+        else:
+            cv2.putText(frame, "BRAK DETEKCJI", (20, 80),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
 
-        # Wyjście po wciśnięciu klawisza 'q'
+        cv2.imshow("Wirtualne Okno - Head Tracking", frame)
+
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
+    tracker.close()
     cap.release()
     cv2.destroyAllWindows()
+
 
 if __name__ == "__main__":
     main()
